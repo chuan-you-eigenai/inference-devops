@@ -1,0 +1,28 @@
+{{- if .Values.keda.enabled }}
+{{- $keda := .Values.keda }}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "sglang-model.fullname" . }}
+  labels:
+    {{- include "sglang-model.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "sglang-model.fullname" . }}
+  {{- if $keda.minReplicaCount }}
+  minReplicaCount: {{ $keda.minReplicaCount }}
+  {{- end }}
+  {{- if $keda.maxReplicaCount }}
+  maxReplicaCount: {{ $keda.maxReplicaCount }}
+  {{- end }}
+  pollingInterval: {{ $keda.pollingInterval }}
+  cooldownPeriod: {{ $keda.cooldownPeriod }}
+  {{- if $keda.advanced }}
+  advanced:
+    {{- toYaml $keda.advanced | nindent 4 }}
+  {{- end }}
+  triggers:
+    {{- toYaml $keda.triggers | nindent 4 }}
+{{- end }}

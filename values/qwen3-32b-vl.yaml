@@ -1,0 +1,60 @@
+replicaCount: 1
+
+image:
+  repository: eigenai/sglang
+  tag: oct-21-dev-v1
+  pullPolicy: IfNotPresent
+
+dnsPolicy: ClusterFirst
+
+container:
+  port: 30328
+  command:
+    - "/bin/sh"
+    - "-c"
+  args:
+    - >
+      python3 -m sglang.launch_server
+      --model Qwen/Qwen3-VL-32B-Instruct-FP8
+      --host 0.0.0.0
+      --port 30328
+      --attention-backend fa3
+      --mem-fraction-static 0.8
+      --cuda-graph-max-bs 32
+      --model-loader-extra-config "{\"enable_multithread_load\": true, \"num_threads\": 32}"
+      --enable-metrics
+
+service:
+  type: NodePort
+  port: 30328
+  nodePort: 30328
+
+hf:
+  repoId: "Qwen/Qwen3-VL-32B-Instruct-FP8"
+  tokenSecret:
+    enabled: true
+    name: hf-token
+    key: token
+
+keda:
+  enabled: true
+  minReplicaCount: 8
+  maxReplicaCount: 16
+  triggers:
+    - type: prometheus
+      metricType: Value
+      metadata:
+        serverAddress: http://prometheus.monitoring.svc.cluster.local:9090
+        metricName: sglang_e2e_p95_latency_seconds_32b
+        query: |
+          histogram_quantile(
+            0.95,
+            sum(
+              rate(
+                sglang:e2e_request_latency_seconds_bucket{
+                  model_name="Qwen/Qwen3-VL-32B-Instruct-FP8"
+                }[3m]
+              )
+            ) by (le)
+          )
+        threshold: "10"

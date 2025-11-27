@@ -1,0 +1,125 @@
+{{- $containerPort := required "container.port must be set" .Values.container.port }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sglang-model.fullname" . }}
+  labels:
+    {{- include "sglang-model.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  revisionHistoryLimit: 3
+  minReadySeconds: 10
+  progressDeadlineSeconds: 1800
+  selector:
+    matchLabels:
+      {{- include "sglang-model.selectorLabels" . | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+  template:
+    metadata:
+      labels:
+        {{- include "sglang-model.selectorLabels" . | nindent 8 }}
+    spec:
+      runtimeClassName: {{ .Values.runtimeClassName }}
+      dnsPolicy: {{ .Values.dnsPolicy }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml .Values.imagePullSecrets | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: hf-snapshot-loader
+          image: "eigenai/dragonfly-hf-snapshot-loader:{{ .Values.dragonfly.tag }}"
+          imagePullPolicy: IfNotPresent
+          command:
+            - python
+            - /opt/dragonfly-hf/snapshot_download_dragonfly.py
+          env:
+            - name: HF_REPO_ID
+              value: "{{ .Values.hf.repoId }}"
+            {{- if .Values.hf.tokenSecret.enabled }}
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.hf.tokenSecret.name }}
+                  key: {{ .Values.hf.tokenSecret.key }}
+            {{- end }}
+          volumeMounts:
+            - name: cache-volume
+              mountPath: {{ .Values.dragonfly.cacheMountPath }}
+      containers:
+        - name: {{ include "sglang-model.fullname" . }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.container.command }}
+          command: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.container.args }}
+          args: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - containerPort: {{ $containerPort }}
+              protocol: TCP
+          env:
+            {{- if .Values.hf.tokenSecret.enabled }}
+            - name: HUGGING_FACE_HUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.hf.tokenSecret.name }}
+                  key: {{ .Values.hf.tokenSecret.key }}
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.hf.tokenSecret.name }}
+                  key: {{ .Values.hf.tokenSecret.key }}
+            {{- end }}
+            {{- range $name, $value := .Values.env }}
+            - name: {{ $name }}
+              value: "{{ $value }}"
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: dshm-volume
+              mountPath: /dev/shm
+            - name: cache-volume
+              mountPath: /root/.cache
+          startupProbe:
+            httpGet:
+              path: /health
+              port: {{ $containerPort }}
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /health_generate
+              port: {{ $containerPort }}
+            periodSeconds: 10
+            timeoutSeconds: 10
+            successThreshold: 1
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ $containerPort }}
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+      volumes:
+        - name: dshm-volume
+          emptyDir:
+            medium: Memory
+            sizeLimit: {{ .Values.cacheVolume.dshmSizeLimit }}
+        - name: cache-volume
+          hostPath:
+            path: {{ .Values.cacheVolume.hostPath }}
+            type: DirectoryOrCreate

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: sglang-model
+description: Generic sglang-based model server with optional Dragonfly/HF cache
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

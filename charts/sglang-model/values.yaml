@@ -1,0 +1,79 @@
+nameOverride: ""
+fullnameOverride: ""
+
+replicaCount: 0
+
+image:
+  repository: eigenai/sglang
+  tag: oct-21-dev-v1
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+runtimeClassName: nvidia
+dnsPolicy: ClusterFirst
+
+nodeSelector:
+  gpu-type: "h100"
+
+resources:
+  limits:
+    cpu: "12"
+    memory: 100Gi
+    nvidia.com/gpu: "1"
+  requests:
+    cpu: "12"
+    memory: 100Gi
+    nvidia.com/gpu: "1"
+
+service:
+  type: NodePort
+  port: null
+  nodePort: null
+
+hf:
+  repoId: ""
+  tokenSecret:
+    enabled: true
+    name: hf-token
+    key: token
+
+dragonfly:
+  tag: v0.0.1
+  cacheMountPath: /root/.cache
+
+cacheVolume:
+  hostPath: /model-local
+  dshmSizeLimit: 64Gi
+
+container:
+  port: null
+  command: []
+  args: []
+
+env:
+  SGLANG_VLM_CACHE_SIZE_MB: "2048"
+
+keda:
+  enabled: false
+  minReplicaCount: 1
+  maxReplicaCount: 1
+  pollingInterval: 30
+  cooldownPeriod: 300
+  advanced:
+    restoreToOriginalReplicaCount: false
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 60
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 15
+        scaleDown:
+          stabilizationWindowSeconds: 600
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 60
+  triggers: []

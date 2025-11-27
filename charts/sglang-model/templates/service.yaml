@@ -1,0 +1,20 @@
+{{- $containerPort := required "container.port must be set" .Values.container.port }}
+{{- $servicePort := default $containerPort .Values.service.port }}
+{{- $nodePort := .Values.service.nodePort }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sglang-model.fullname" . }}-svc
+  labels:
+    {{- include "sglang-model.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "sglang-model.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ $servicePort }}
+      targetPort: {{ $containerPort }}
+      {{- if and (eq .Values.service.type "NodePort") $nodePort }}
+      nodePort: {{ $nodePort }}
+      {{- end }}
