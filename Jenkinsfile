@@ -53,13 +53,13 @@ pipeline {
 
             # 8B TEST
             helm upgrade --install qwen3-8b-vl-${BRANCH_SLUG} charts/sglang-model \
-              -namespace sglang-test-${BRANCH_SLUG} \
+              --namespace sglang-test-${BRANCH_SLUG} \
               --create-namespace \
               -f values/qwen3-8b-vl.yaml
 
             # 32B TEST
             helm upgrade --install qwen3-32b-vl-${BRANCH_SLUG} charts/sglang-model \
-              -namespace sglang-test-${BRANCH_SLUG} \
+              --namespace sglang-test-${BRANCH_SLUG} \
               --create-namespace \
               -f values/qwen3-32b-vl.yaml
             """
@@ -87,7 +87,7 @@ pipeline {
 
             echo "Deploying Qwen3-8B-VL to PROD (namespace: default)..."
             helm upgrade --install qwen3-8b-vl charts/sglang-model \
-              -namespace default \
+              --namespace default \
               -f values/qwen3-8b-vl.yaml
             '''
           }
@@ -113,7 +113,7 @@ pipeline {
 
             echo "Deploying Qwen3-32B-VL to PROD (namespace: default)..."
             helm upgrade --install qwen3-32b-vl charts/sglang-model \
-              -namespace default \
+              --namespace default \
               -f values/qwen3-32b-vl.yaml
             '''
           }
