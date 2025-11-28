@@ -1,11 +1,8 @@
 pipeline {
-  agent {
-    node {
-      label 'base'
-    }
-  }
+  agent any
+
   environment {
-    KUBECONFIG_CREDENTIAL_ID = 'kubeconfig-cred-id'
+    KUBECONFIG_CREDENTIAL_ID = 'kubeconfig-admin'
   }
 
   stages {
@@ -35,14 +32,14 @@ pipeline {
       }
     }
 
-    /************ 非 main 分支：只部署到 TEST ************/
+    /************ 非 main 分支：部署到 TEST ************/
     stage('Deploy to TEST (non-main branches)') {
       when {
         not { branch 'main' }
       }
       steps {
         container('base') {
-          withKubeConfig([credentialsId: env.KUBECONFIG_CREDENTIAL_ID]) {
+          kubeconfig(credentialsId: env.KUBECONFIG_CREDENTIAL_ID) {
             sh """
             echo "Deploying TEST env for branch ${BRANCH_SLUG} ..."
 
@@ -70,7 +67,7 @@ pipeline {
       }
       steps {
         container('base') {
-          withKubeConfig([credentialsId: env.KUBECONFIG_CREDENTIAL_ID]) {
+          kubeconfig(credentialsId: env.KUBECONFIG_CREDENTIAL_ID) {
             sh '''
             echo "Deploying Qwen3-8B-VL to PROD (namespace: default)..."
             helm upgrade --install qwen3-8b-vl charts/sglang-model \
@@ -88,7 +85,7 @@ pipeline {
       }
       steps {
         container('base') {
-          withKubeConfig([credentialsId: env.KUBECONFIG_CREDENTIAL_ID]) {
+          kubeconfig(credentialsId: env.KUBECONFIG_CREDENTIAL_ID) {
             sh '''
             echo "Deploying Qwen3-32B-VL to PROD (namespace: default)..."
             helm upgrade --install qwen3-32b-vl charts/sglang-model \
