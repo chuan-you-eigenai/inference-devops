@@ -1,5 +1,9 @@
 pipeline {
-  agent any
+  agent {
+    node {
+      label 'base'
+    }
+  }
 
   environment {
     KUBECONFIG_CREDENTIAL_ID = 'kubeconfig-admin'
