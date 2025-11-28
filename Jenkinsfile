@@ -32,24 +32,32 @@ pipeline {
       }
     }
 
-    /************ 非 main 分支：部署到 TEST ************/
+    /************ 非 main 分支：只部署 TEST ************/
     stage('Deploy to TEST (non-main branches)') {
       when {
         not { branch 'main' }
       }
       steps {
         container('base') {
-          kubeconfig(credentialsId: env.KUBECONFIG_CREDENTIAL_ID) {
+          withCredentials([
+            kubeconfigFile(
+              credentialsId: env.KUBECONFIG_CREDENTIAL_ID,
+              variable: 'KUBECONFIG'
+            )
+          ]) {
             sh """
+            echo "Using KUBECONFIG at: \$KUBECONFIG"
+            kubectl config current-context || true
+
             echo "Deploying TEST env for branch ${BRANCH_SLUG} ..."
 
-            # 8B 测试部署
+            # 8B TEST
             helm upgrade --install qwen3-8b-vl-${BRANCH_SLUG} charts/sglang-model \
               -n sglang-test-${BRANCH_SLUG} \
               --create-namespace \
               -f values/qwen3-8b-vl.yaml
 
-            # 32B 测试部署
+            # 32B TEST
             helm upgrade --install qwen3-32b-vl-${BRANCH_SLUG} charts/sglang-model \
               -n sglang-test-${BRANCH_SLUG} \
               --create-namespace \
@@ -60,15 +68,23 @@ pipeline {
       }
     }
 
-    /************ main 分支：部署到线上 default ************/
+    /************ main 分支：部署 PROD ************/
     stage('Deploy Qwen3-8B-VL (PROD)') {
       when {
         branch 'main'
       }
       steps {
         container('base') {
-          kubeconfig(credentialsId: env.KUBECONFIG_CREDENTIAL_ID) {
+          withCredentials([
+            kubeconfigFile(
+              credentialsId: env.KUBECONFIG_CREDENTIAL_ID,
+              variable: 'KUBECONFIG'
+            )
+          ]) {
             sh '''
+            echo "Using KUBECONFIG at: $KUBECONFIG"
+            kubectl config current-context || true
+
             echo "Deploying Qwen3-8B-VL to PROD (namespace: default)..."
             helm upgrade --install qwen3-8b-vl charts/sglang-model \
               -n default \
@@ -85,8 +101,16 @@ pipeline {
       }
       steps {
         container('base') {
-          kubeconfig(credentialsId: env.KUBECONFIG_CREDENTIAL_ID) {
+          withCredentials([
+            kubeconfigFile(
+              credentialsId: env.KUBECONFIG_CREDENTIAL_ID,
+              variable: 'KUBECONFIG'
+            )
+          ]) {
             sh '''
+            echo "Using KUBECONFIG at: $KUBECONFIG"
+            kubectl config current-context || true
+
             echo "Deploying Qwen3-32B-VL to PROD (namespace: default)..."
             helm upgrade --install qwen3-32b-vl charts/sglang-model \
               -n default \
