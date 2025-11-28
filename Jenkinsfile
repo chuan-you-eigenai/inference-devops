@@ -26,6 +26,17 @@ pipeline {
       steps {
         container('base') {
           sh '''
+          set -e
+
+          if ! helm version --short 2>/dev/null | grep -q "v3"; then
+            echo "Helm v3 not found, installing local Helm 3 client..."
+            curl -sSL https://get.helm.sh/helm-v3.16.0-linux-amd64.tar.gz -o /tmp/helm3.tgz
+            tar -C /tmp -xzf /tmp/helm3.tgz
+            export PATH="/tmp/linux-amd64:$PATH"
+          fi
+
+          helm version || true
+
           helm lint charts/sglang-model
           '''
         }
@@ -45,6 +56,15 @@ pipeline {
             )
           ]) {
             sh """
+            set -e
+
+            if ! helm version --short 2>/dev/null | grep -q "v3"; then
+              echo "Helm v3 not found, installing local Helm 3 client..."
+              curl -sSL https://get.helm.sh/helm-v3.16.0-linux-amd64.tar.gz -o /tmp/helm3.tgz
+              tar -C /tmp -xzf /tmp/helm3.tgz
+              export PATH="/tmp/linux-amd64:\$PATH"
+            fi
+
             echo "Using KUBECONFIG at: \$KUBECONFIG"
             kubectl config current-context || true
 
@@ -80,6 +100,15 @@ pipeline {
             )
           ]) {
             sh '''
+            set -e
+
+            if ! helm version --short 2>/dev/null | grep -q "v3"; then
+              echo "Helm v3 not found, installing local Helm 3 client..."
+              curl -sSL https://get.helm.sh/helm-v3.16.0-linux-amd64.tar.gz -o /tmp/helm3.tgz
+              tar -C /tmp -xzf /tmp/helm3.tgz
+              export PATH="/tmp/linux-amd64:$PATH"
+            fi
+
             echo "Using KUBECONFIG at: $KUBECONFIG"
             kubectl config current-context || true
 
@@ -106,6 +135,15 @@ pipeline {
             )
           ]) {
             sh '''
+            set -e
+
+            if ! helm version --short 2>/dev/null | grep -q "v3"; then
+              echo "Helm v3 not found, installing local Helm 3 client..."
+              curl -sSL https://get.helm.sh/helm-v3.16.0-linux-amd64.tar.gz -o /tmp/helm3.tgz
+              tar -C /tmp -xzf /tmp/helm3.tgz
+              export PATH="/tmp/linux-amd64:$PATH"
+            fi
+
             echo "Using KUBECONFIG at: $KUBECONFIG"
             kubectl config current-context || true
 
@@ -137,6 +175,15 @@ pipeline {
             )
           ]) {
             sh """
+            set -e
+
+            if ! helm version --short 2>/dev/null | grep -q "v3"; then
+              echo "Helm v3 not found, installing local Helm 3 client..."
+              curl -sSL https://get.helm.sh/helm-v3.16.0-linux-amd64.tar.gz -o /tmp/helm3.tgz
+              tar -C /tmp -xzf /tmp/helm3.tgz
+              export PATH="/tmp/linux-amd64:\$PATH"
+            fi
+
             echo "Using KUBECONFIG at: \$KUBECONFIG"
             TEST_NS=sglang-test-${BRANCH_SLUG}
             echo "Cleaning up TEST namespace: \$TEST_NS"
