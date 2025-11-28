@@ -29,9 +29,8 @@ container:
     - "--enable-metrics"
 
 service:
-  type: NodePort
+  type: ClusterIP
   port: 30088
-  nodePort: 30088
 
 dragonfly:
   tag: v0.0.1

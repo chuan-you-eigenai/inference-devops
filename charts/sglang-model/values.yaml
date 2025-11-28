@@ -27,7 +27,7 @@ resources:
     nvidia.com/gpu: "1"
 
 service:
-  type: NodePort
+  type: ClusterIP
   port: null
   nodePort: null
 

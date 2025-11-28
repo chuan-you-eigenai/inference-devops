@@ -25,9 +25,8 @@ container:
       --enable-metrics
 
 service:
-  type: NodePort
+  type: ClusterIP
   port: 30328
-  nodePort: 30328
 
 hf:
   repoId: "Qwen/Qwen3-VL-32B-Instruct-FP8"
