@@ -32,7 +32,6 @@ pipeline {
       }
     }
 
-    /************ 非 main 分支：只部署 TEST ************/
     stage('Deploy to TEST (non-main branches)') {
       when {
         not { branch 'main' }
@@ -49,18 +48,18 @@ pipeline {
             echo "Using KUBECONFIG at: \$KUBECONFIG"
             kubectl config current-context || true
 
+            TEST_NS=sglang-test-${BRANCH_SLUG}
+            echo "Ensuring namespace: \$TEST_NS"
+            kubectl get ns "\$TEST_NS" >/dev/null 2>&1 || kubectl create ns "\$TEST_NS"
+
             echo "Deploying TEST env for branch ${BRANCH_SLUG} ..."
 
-            # 8B TEST
             helm upgrade --install qwen3-8b-vl-${BRANCH_SLUG} charts/sglang-model \
-              --namespace sglang-test-${BRANCH_SLUG} \
-              --create-namespace \
+              --namespace "\$TEST_NS" \
               -f values/qwen3-8b-vl.yaml
 
-            # 32B TEST
             helm upgrade --install qwen3-32b-vl-${BRANCH_SLUG} charts/sglang-model \
-              --namespace sglang-test-${BRANCH_SLUG} \
-              --create-namespace \
+              --namespace "\$TEST_NS" \
               -f values/qwen3-32b-vl.yaml
             """
           }
@@ -68,7 +67,6 @@ pipeline {
       }
     }
 
-    /************ main 分支：部署 PROD ************/
     stage('Deploy Qwen3-8B-VL (PROD)') {
       when {
         branch 'main'
@@ -116,6 +114,38 @@ pipeline {
               --namespace default \
               -f values/qwen3-32b-vl.yaml
             '''
+          }
+        }
+      }
+    }
+
+    stage('Cleanup TEST env (manual)') {
+      when {
+        not { branch 'main' }
+      }
+      steps {
+        input(
+          id: 'cleanup-test-env',
+          message: "Clean up TEST env for branch ${BRANCH_SLUG} ?",
+          ok: 'Yes, delete it'
+        )
+        container('base') {
+          withCredentials([
+            kubeconfigFile(
+              credentialsId: env.KUBECONFIG_CREDENTIAL_ID,
+              variable: 'KUBECONFIG'
+            )
+          ]) {
+            sh """
+            echo "Using KUBECONFIG at: \$KUBECONFIG"
+            TEST_NS=sglang-test-${BRANCH_SLUG}
+            echo "Cleaning up TEST namespace: \$TEST_NS"
+
+            helm uninstall qwen3-8b-vl-${BRANCH_SLUG} --namespace "\$TEST_NS" || true
+            helm uninstall qwen3-32b-vl-${BRANCH_SLUG} --namespace "\$TEST_NS" || true
+
+            kubectl delete ns "\$TEST_NS" || true
+            """
           }
         }
       }
