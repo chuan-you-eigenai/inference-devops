@@ -5,8 +5,6 @@ image:
   tag: v0.5.4.post3
   pullPolicy: Always
 
-dnsPolicy: Default
-
 container:
   port: 30088
   command:
@@ -41,3 +39,26 @@ hf:
     enabled: true
     name: hf-token
     key: token
+
+keda:
+  enabled: true
+  minReplicaCount: 1
+  maxReplicaCount: 1
+  triggers:
+    - type: prometheus
+      metricType: Value
+      metadata:
+        serverAddress: http://prometheus.monitoring.svc.cluster.local:9090
+        metricName: sglang_e2e_p95_latency_seconds_32b
+        query: |
+          histogram_quantile(
+            0.95,
+            sum(
+              rate(
+                sglang:e2e_request_latency_seconds_bucket{
+                  model_name="Qwen/Qwen3-VL-8B-Instruct-FP8"
+                }[3m]
+              )
+            ) by (le)
+          )
+        threshold: "10"

@@ -3,6 +3,7 @@ pipeline {
 
   environment {
     KUBECONFIG_CREDENTIAL_ID = 'kubeconfig-admin'
+    HF_TOKEN = credentials('hf-token-plain')
   }
 
   stages {
@@ -72,15 +73,16 @@ pipeline {
             echo "Ensuring namespace: \$TEST_NS"
             kubectl get ns "\$TEST_NS" >/dev/null 2>&1 || kubectl create ns "\$TEST_NS"
 
+            echo "Ensuring HF token Secret in \$TEST_NS"
+            kubectl -n "\$TEST_NS" create secret generic hf-token \
+              --from-literal=token="${HF_TOKEN}" \
+              --dry-run=client -o yaml | kubectl apply -f -
+
             echo "Deploying TEST env for branch ${BRANCH_SLUG} ..."
 
             helm upgrade --install qwen3-8b-vl-${BRANCH_SLUG} charts/sglang-model \
               --namespace "\$TEST_NS" \
               -f values/qwen3-8b-vl.yaml
-
-            helm upgrade --install qwen3-32b-vl-${BRANCH_SLUG} charts/sglang-model \
-              --namespace "\$TEST_NS" \
-              -f values/qwen3-32b-vl.yaml
             """
           }
         }
@@ -113,6 +115,12 @@ pipeline {
             kubectl config current-context || true
 
             echo "Deploying Qwen3-8B-VL to PROD (namespace: default)..."
+
+            echo "Ensuring HF token Secret in default"
+            kubectl -n default create secret generic hf-token \
+              --from-literal=token="${HF_TOKEN}" \
+              --dry-run=client -o yaml | kubectl apply -f -
+
             helm upgrade --install qwen3-8b-vl charts/sglang-model \
               --namespace default \
               -f values/qwen3-8b-vl.yaml
@@ -148,6 +156,12 @@ pipeline {
             kubectl config current-context || true
 
             echo "Deploying Qwen3-32B-VL to PROD (namespace: default)..."
+
+            echo "Ensuring HF token Secret in default"
+            kubectl -n default create secret generic hf-token \
+              --from-literal=token="${HF_TOKEN}" \
+              --dry-run=client -o yaml | kubectl apply -f -
+
             helm upgrade --install qwen3-32b-vl charts/sglang-model \
               --namespace default \
               -f values/qwen3-32b-vl.yaml
