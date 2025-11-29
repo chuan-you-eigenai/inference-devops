@@ -54,20 +54,15 @@ pipeline {
             kubeconfigFile(
               credentialsId: env.KUBECONFIG_CREDENTIAL_ID,
               variable: 'KUBECONFIG'
+            ),
+            usernamePassword(
+              credentialsId: 'dockerhub-regcred',
+              usernameVariable: 'DOCKERHUB_USERNAME',
+              passwordVariable: 'DOCKERHUB_PASSWORD'
             )
           ]) {
             sh """
             set -e
-
-            if ! helm version --short 2>/dev/null | grep -q "v3"; then
-              echo "Helm v3 not found, installing local Helm 3 client..."
-              curl -sSL https://get.helm.sh/helm-v3.16.0-linux-amd64.tar.gz -o /tmp/helm3.tgz
-              tar -C /tmp -xzf /tmp/helm3.tgz
-              export PATH="/tmp/linux-amd64:\$PATH"
-            fi
-
-            echo "Using KUBECONFIG at: \$KUBECONFIG"
-            kubectl config current-context || true
 
             TEST_NS=sglang-test-${BRANCH_SLUG}
             echo "Ensuring namespace: \$TEST_NS"
@@ -78,12 +73,56 @@ pipeline {
               --from-literal=token="${HF_TOKEN}" \
               --dry-run=client -o yaml | kubectl apply -f -
 
+            echo "Ensuring image pull secret in \$TEST_NS"
+            kubectl -n "\$TEST_NS" create secret docker-registry regcred \
+              --docker-server=https://index.docker.io/v1/ \
+              --docker-username="$DOCKERHUB_USERNAME" \
+              --docker-password="$DOCKERHUB_PASSWORD" \
+              --dry-run=client -o yaml | kubectl apply -f -
+
             echo "Deploying TEST env for branch ${BRANCH_SLUG} ..."
 
             helm upgrade --install qwen3-8b-vl-${BRANCH_SLUG} charts/sglang-model \
               --namespace "\$TEST_NS" \
               -f values/qwen3-8b-vl.yaml
             """
+          }
+        }
+      }
+    }
+
+    stage('Prepare PROD secrets (main branch)') {
+      when {
+        branch 'main'
+      }
+      steps {
+        container('base') {
+          withCredentials([
+            kubeconfigFile(
+              credentialsId: env.KUBECONFIG_CREDENTIAL_ID,
+              variable: 'KUBECONFIG'
+            ),
+            usernamePassword(
+              credentialsId: 'dockerhub-regcred',
+              usernameVariable: 'DOCKERHUB_USERNAME',
+              passwordVariable: 'DOCKERHUB_PASSWORD'
+            )
+          ]) {
+            sh '''
+            set -e
+
+            echo "Ensuring image pull secret in default"
+            kubectl -n default create secret docker-registry regcred \
+              --docker-server=https://index.docker.io/v1/ \
+              --docker-username="$DOCKERHUB_USERNAME" \
+              --docker-password="$DOCKERHUB_PASSWORD" \
+              --dry-run=client -o yaml | kubectl apply -f -
+
+            echo "Ensuring HF token Secret in default"
+            kubectl -n default create secret generic hf-token \
+              --from-literal=token="${HF_TOKEN}" \
+              --dry-run=client -o yaml | kubectl apply -f -
+            '''
           }
         }
       }
@@ -102,25 +141,7 @@ pipeline {
             )
           ]) {
             sh '''
-            set -e
-
-            if ! helm version --short 2>/dev/null | grep -q "v3"; then
-              echo "Helm v3 not found, installing local Helm 3 client..."
-              curl -sSL https://get.helm.sh/helm-v3.16.0-linux-amd64.tar.gz -o /tmp/helm3.tgz
-              tar -C /tmp -xzf /tmp/helm3.tgz
-              export PATH="/tmp/linux-amd64:$PATH"
-            fi
-
-            echo "Using KUBECONFIG at: $KUBECONFIG"
-            kubectl config current-context || true
-
             echo "Deploying Qwen3-8B-VL to PROD (namespace: default)..."
-
-            echo "Ensuring HF token Secret in default"
-            kubectl -n default create secret generic hf-token \
-              --from-literal=token="${HF_TOKEN}" \
-              --dry-run=client -o yaml | kubectl apply -f -
-
             helm upgrade --install qwen3-8b-vl charts/sglang-model \
               --namespace default \
               -f values/qwen3-8b-vl.yaml
@@ -143,25 +164,7 @@ pipeline {
             )
           ]) {
             sh '''
-            set -e
-
-            if ! helm version --short 2>/dev/null | grep -q "v3"; then
-              echo "Helm v3 not found, installing local Helm 3 client..."
-              curl -sSL https://get.helm.sh/helm-v3.16.0-linux-amd64.tar.gz -o /tmp/helm3.tgz
-              tar -C /tmp -xzf /tmp/helm3.tgz
-              export PATH="/tmp/linux-amd64:$PATH"
-            fi
-
-            echo "Using KUBECONFIG at: $KUBECONFIG"
-            kubectl config current-context || true
-
             echo "Deploying Qwen3-32B-VL to PROD (namespace: default)..."
-
-            echo "Ensuring HF token Secret in default"
-            kubectl -n default create secret generic hf-token \
-              --from-literal=token="${HF_TOKEN}" \
-              --dry-run=client -o yaml | kubectl apply -f -
-
             helm upgrade --install qwen3-32b-vl charts/sglang-model \
               --namespace default \
               -f values/qwen3-32b-vl.yaml
@@ -186,19 +189,16 @@ pipeline {
             kubeconfigFile(
               credentialsId: env.KUBECONFIG_CREDENTIAL_ID,
               variable: 'KUBECONFIG'
+            ),
+            usernamePassword(
+              credentialsId: 'dockerhub-regcred',
+              usernameVariable: 'DOCKERHUB_USERNAME',
+              passwordVariable: 'DOCKERHUB_PASSWORD'
             )
           ]) {
             sh """
             set -e
 
-            if ! helm version --short 2>/dev/null | grep -q "v3"; then
-              echo "Helm v3 not found, installing local Helm 3 client..."
-              curl -sSL https://get.helm.sh/helm-v3.16.0-linux-amd64.tar.gz -o /tmp/helm3.tgz
-              tar -C /tmp -xzf /tmp/helm3.tgz
-              export PATH="/tmp/linux-amd64:\$PATH"
-            fi
-
-            echo "Using KUBECONFIG at: \$KUBECONFIG"
             TEST_NS=sglang-test-${BRANCH_SLUG}
             echo "Cleaning up TEST namespace: \$TEST_NS"
 
