@@ -82,7 +82,7 @@ pipeline {
 
             echo "Deploying TEST env for branch ${BRANCH_SLUG} ..."
 
-            helm upgrade --install qwen3-8b-vl-${BRANCH_SLUG} charts/sglang-model \
+            /tmp/linux-amd64/helm upgrade --install qwen3-8b-vl-${BRANCH_SLUG} charts/sglang-model \
               --namespace "\$TEST_NS" \
               -f values/qwen3-8b-vl.yaml
             """
@@ -142,7 +142,7 @@ pipeline {
           ]) {
             sh '''
             echo "Deploying Qwen3-8B-VL to PROD (namespace: default)..."
-            helm upgrade --install qwen3-8b-vl charts/sglang-model \
+            /tmp/linux-amd64/helm upgrade --install qwen3-8b-vl charts/sglang-model \
               --namespace default \
               -f values/qwen3-8b-vl.yaml
             '''
@@ -165,7 +165,7 @@ pipeline {
           ]) {
             sh '''
             echo "Deploying Qwen3-32B-VL to PROD (namespace: default)..."
-            helm upgrade --install qwen3-32b-vl charts/sglang-model \
+            /tmp/linux-amd64/helm upgrade --install qwen3-32b-vl charts/sglang-model \
               --namespace default \
               -f values/qwen3-32b-vl.yaml
             '''
@@ -202,8 +202,8 @@ pipeline {
             TEST_NS=sglang-test-${BRANCH_SLUG}
             echo "Cleaning up TEST namespace: \$TEST_NS"
 
-            helm uninstall qwen3-8b-vl-${BRANCH_SLUG} --namespace "\$TEST_NS" || true
-            helm uninstall qwen3-32b-vl-${BRANCH_SLUG} --namespace "\$TEST_NS" || true
+            /tmp/linux-amd64/helm uninstall qwen3-8b-vl-${BRANCH_SLUG} --namespace "\$TEST_NS" || true
+            /tmp/linux-amd64/helm uninstall qwen3-32b-vl-${BRANCH_SLUG} --namespace "\$TEST_NS" || true
 
             kubectl delete ns "\$TEST_NS" || true
             """
