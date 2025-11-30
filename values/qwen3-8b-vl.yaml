@@ -23,7 +23,9 @@ container:
     - "--mem-fraction-static"
     - "0.5"
     - "--cuda-graph-max-bs"
-    - "64"
+    - "32"
+    - "--model-loader-extra-config"
+    - '{"enable_multithread_load": true, "num_threads": 32}'
     - "--enable-metrics"
 
 service:
