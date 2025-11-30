@@ -8,7 +8,8 @@ image:
   tag: oct-21-dev-v1
   pullPolicy: IfNotPresent
 
-imagePullSecrets: []
+imagePullSecrets:
+  - name: regcred
 
 runtimeClassName: nvidia
 dnsPolicy: ClusterFirst
@@ -27,7 +28,7 @@ resources:
     nvidia.com/gpu: "1"
 
 service:
-  type: NodePort
+  type: ClusterIP
   port: null
   nodePort: null
 

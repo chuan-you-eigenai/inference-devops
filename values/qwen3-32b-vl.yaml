@@ -5,7 +5,6 @@ image:
   tag: oct-21-dev-v1
   pullPolicy: IfNotPresent
 
-dnsPolicy: ClusterFirst
 
 container:
   port: 30328
@@ -25,9 +24,8 @@ container:
       --enable-metrics
 
 service:
-  type: NodePort
+  type: ClusterIP
   port: 30328
-  nodePort: 30328
 
 hf:
   repoId: "Qwen/Qwen3-VL-32B-Instruct-FP8"
@@ -38,8 +36,8 @@ hf:
 
 keda:
   enabled: true
-  minReplicaCount: 8
-  maxReplicaCount: 16
+  minReplicaCount: 1
+  maxReplicaCount: 1
   triggers:
     - type: prometheus
       metricType: Value
