@@ -12,7 +12,27 @@ pipeline {
         script {
           env.BRANCH_SLUG = (env.BRANCH_NAME ?: 'unknown')
             .replaceAll('[^a-zA-Z0-9-]+', '-')
+
+          def isMain = (env.BRANCH_NAME == 'main')
+
+          def changedFiles = sh(
+            script: 'git diff --name-only HEAD~1 HEAD || true',
+            returnStdout: true
+          ).trim().split('\n') as List<String>
+
+          def changedValues = changedFiles.findAll { it.startsWith('values/') && (it.endsWith('.yaml') || it.endsWith('.yml')) }
+
+          env.CHANGED_VALUES = changedValues.join(',')
+
+          if (!isMain && changedValues.size() == 0) {
+            env.HELM_CHANGED = 'false'
+          } else {
+            env.HELM_CHANGED = 'true'
+          }
+
           echo "BRANCH_NAME=${env.BRANCH_NAME}, BRANCH_SLUG=${env.BRANCH_SLUG}"
+          echo "CHANGED_VALUES=${env.CHANGED_VALUES}"
+          echo "HELM_CHANGED=${env.HELM_CHANGED}"
         }
       }
     }
@@ -24,6 +44,9 @@ pipeline {
     }
 
     stage('Helm Lint') {
+      when {
+        expression { env.HELM_CHANGED == 'true' }
+      }
       steps {
         container('base') {
           sh '''
@@ -46,7 +69,10 @@ pipeline {
 
     stage('Deploy to TEST (non-main branches)') {
       when {
-        not { branch 'main' }
+        allOf {
+          not { branch 'main' }
+          expression { env.HELM_CHANGED == 'true' }
+        }
       }
       steps {
         container('base') {
@@ -63,6 +89,11 @@ pipeline {
           ]) {
             sh """
             set -e
+
+            if [ -z "\$CHANGED_VALUES" ]; then
+              echo "No changed values files, skip TEST deploy."
+              exit 0
+            fi
 
             TEST_NS=sglang-test-${BRANCH_SLUG}
             echo "Ensuring namespace: \$TEST_NS"
@@ -76,24 +107,39 @@ pipeline {
             echo "Ensuring image pull secret in \$TEST_NS"
             kubectl -n "\$TEST_NS" create secret docker-registry regcred \
               --docker-server=https://index.docker.io/v1/ \
-              --docker-username="$DOCKERHUB_USERNAME" \
-              --docker-password="$DOCKERHUB_PASSWORD" \
+              --docker-username="\$DOCKERHUB_USERNAME" \
+              --docker-password="\$DOCKERHUB_PASSWORD" \
               --dry-run=client -o yaml | kubectl apply -f -
 
-            echo "Deploying TEST env for branch ${BRANCH_SLUG} ..."
+            IFS=',' read -r -a VALUE_FILES <<< "\$CHANGED_VALUES"
 
-            /tmp/linux-amd64/helm upgrade --install qwen3-8b-vl-${BRANCH_SLUG} charts/sglang-model \
-              --namespace "\$TEST_NS" \
-              -f values/qwen3-8b-vl.yaml
+            for v in "\${VALUE_FILES[@]}"; do
+              echo "Deploying for values file: \$v"
+              base=\$(basename "\$v")
+              base="\${base%.*}"
+
+              release="\${base}-${BRANCH_SLUG}"
+
+              echo "Release name: \$release"
+
+              /tmp/linux-amd64/helm upgrade --install "\$release" charts/sglang-model \
+                --namespace "\$TEST_NS" \
+                -f "\$v" \
+                --set replicaCount=1 \
+                --set keda.enabled=false
+            done
             """
           }
         }
       }
     }
 
-    stage('Prepare PROD secrets (main branch)') {
+    stage('Wait TEST rollout') {
       when {
-        branch 'main'
+        allOf {
+          not { branch 'main' }
+          expression { env.HELM_CHANGED == 'true' }
+        }
       }
       steps {
         container('base') {
@@ -101,74 +147,32 @@ pipeline {
             kubeconfigFile(
               credentialsId: env.KUBECONFIG_CREDENTIAL_ID,
               variable: 'KUBECONFIG'
-            ),
-            usernamePassword(
-              credentialsId: 'dockerhub-regcred',
-              usernameVariable: 'DOCKERHUB_USERNAME',
-              passwordVariable: 'DOCKERHUB_PASSWORD'
             )
           ]) {
-            sh '''
+            sh """
             set -e
 
-            echo "Ensuring image pull secret in default"
-            kubectl -n default create secret docker-registry regcred \
-              --docker-server=https://index.docker.io/v1/ \
-              --docker-username="$DOCKERHUB_USERNAME" \
-              --docker-password="$DOCKERHUB_PASSWORD" \
-              --dry-run=client -o yaml | kubectl apply -f -
+            if [ -z "\$CHANGED_VALUES" ]; then
+              echo "No changed values files, skip wait."
+              exit 0
+            fi
 
-            echo "Ensuring HF token Secret in default"
-            kubectl -n default create secret generic hf-token \
-              --from-literal=token="${HF_TOKEN}" \
-              --dry-run=client -o yaml | kubectl apply -f -
-            '''
-          }
-        }
-      }
-    }
+            TEST_NS=sglang-test-${BRANCH_SLUG}
+            IFS=',' read -r -a VALUE_FILES <<< "\$CHANGED_VALUES"
 
-    stage('Deploy Qwen3-8B-VL (PROD)') {
-      when {
-        branch 'main'
-      }
-      steps {
-        container('base') {
-          withCredentials([
-            kubeconfigFile(
-              credentialsId: env.KUBECONFIG_CREDENTIAL_ID,
-              variable: 'KUBECONFIG'
-            )
-          ]) {
-            sh '''
-            echo "Deploying Qwen3-8B-VL to PROD (namespace: default)..."
-            /tmp/linux-amd64/helm upgrade --install qwen3-8b-vl charts/sglang-model \
-              --namespace default \
-              -f values/qwen3-8b-vl.yaml
-            '''
-          }
-        }
-      }
-    }
+            for v in "\${VALUE_FILES[@]}"; do
+              base=\$(basename "\$v")
+              base="\${base%.*}"
+              release="\${base}-${BRANCH_SLUG}"
+              deployName="\${release}-sglang-model"
 
-    stage('Deploy Qwen3-32B-VL (PROD)') {
-      when {
-        branch 'main'
-      }
-      steps {
-        container('base') {
-          withCredentials([
-            kubeconfigFile(
-              credentialsId: env.KUBECONFIG_CREDENTIAL_ID,
-              variable: 'KUBECONFIG'
-            )
-          ]) {
-            sh '''
-            echo "Deploying Qwen3-32B-VL to PROD (namespace: default)..."
-            /tmp/linux-amd64/helm upgrade --install qwen3-32b-vl charts/sglang-model \
-              --namespace default \
-              -f values/qwen3-32b-vl.yaml
-            '''
+              echo "Waiting for rollout of deployment: \$deployName in namespace: \$TEST_NS"
+
+              kubectl -n "\$TEST_NS" rollout status deploy "\$deployName" --timeout=20m
+            done
+
+            kubectl -n "\$TEST_NS" get pods -o wide || true
+            """
           }
         }
       }
@@ -176,34 +180,29 @@ pipeline {
 
     stage('Cleanup TEST env (manual)') {
       when {
-        not { branch 'main' }
+        allOf {
+          not { branch 'main' }
+          expression { env.HELM_CHANGED == 'true' }
+        }
       }
       steps {
         input(
           id: 'cleanup-test-env',
-          message: "Clean up TEST env for branch ${BRANCH_SLUG} ?",
-          ok: 'Yes, delete it'
+          message: "Clean up TEST namespace for branch ${BRANCH_SLUG} ?",
+          ok: 'Yes, delete namespace'
         )
         container('base') {
           withCredentials([
             kubeconfigFile(
               credentialsId: env.KUBECONFIG_CREDENTIAL_ID,
               variable: 'KUBECONFIG'
-            ),
-            usernamePassword(
-              credentialsId: 'dockerhub-regcred',
-              usernameVariable: 'DOCKERHUB_USERNAME',
-              passwordVariable: 'DOCKERHUB_PASSWORD'
             )
           ]) {
             sh """
             set -e
 
             TEST_NS=sglang-test-${BRANCH_SLUG}
-            echo "Cleaning up TEST namespace: \$TEST_NS"
-
-            /tmp/linux-amd64/helm uninstall qwen3-8b-vl-${BRANCH_SLUG} --namespace "\$TEST_NS" || true
-            /tmp/linux-amd64/helm uninstall qwen3-32b-vl-${BRANCH_SLUG} --namespace "\$TEST_NS" || true
+            echo "Deleting TEST namespace: \$TEST_NS"
 
             kubectl delete ns "\$TEST_NS" || true
             """
